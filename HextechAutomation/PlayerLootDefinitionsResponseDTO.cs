@@ -1,6 +1,6 @@
 ﻿namespace HextechAutomation;
 
-public record LootDefinition(LootItemList LootItemList, RecipeList RecipeList, QueryResult QueryResult, PlayerLoot[] PlayerLoot);
+public record PlayerLootDefinitionsResponseDTO(LootItemList LootItemList, RecipeList RecipeList, QueryResult QueryResult, PlayerLoot[] PlayerLoot);
 
 public record LootItemList(LootItem[] LootItems, long LastUpdate);
 
