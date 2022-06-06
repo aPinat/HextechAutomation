@@ -11,5 +11,5 @@ Repo is only here for reference.
 - Print all player loot, including hidden/legacy items
 - Bulk craft keys from key fragments
 - Bulk open all chests/capsules
-- Cleanup/disenchant champion/champion shards, leaving some depending on ownership and mastery upgrades
+- Cleanup/disenchant champion shards, leaving some depending on ownership and mastery upgrades
 - Bulk re-roll, e.g. emotes that can't be disenchanted

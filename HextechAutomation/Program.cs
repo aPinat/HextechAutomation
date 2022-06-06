@@ -10,6 +10,6 @@ var leagueClient = new LeagueClient(rso);
 var sessionToken = await leagueClient.GetLoginSessionTokenAsync();
 var hextech = await HextechClient.CreateInstanceAsync(sessionToken);
 await hextech.PrintPlayerLootAsync();
-await hextech.CraftKeysAsync();
 await hextech.OpenChestsAsync();
-await hextech.CleanupChampionsAsync();
+await hextech.CraftKeysAsync();
+await hextech.CleanupChampionShardsAsync();

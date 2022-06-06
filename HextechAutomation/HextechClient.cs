@@ -1,4 +1,5 @@
 ﻿using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.IdentityModel.JsonWebTokens;
 using RiotAuth;
@@ -71,38 +72,82 @@ public class HextechClient
     public async Task OpenChestsAsync()
     {
         var lootDefinitions = await GetPlayerLootDefinitionsAsync();
-        foreach (var loot in lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("CHEST")))
+        foreach (var (lootName, refId, count) in lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("CHEST")))
         {
-            var (lootName, refId, count) = loot;
-            var humanName = _nameResolver.GetLootHumanName(lootName, refId);
             var recipe = lootDefinitions.RecipeList.Recipes.FirstOrDefault(recipe => recipe.Slots.Length == 1 && recipe.Slots.Any(slot => slot.Query == $"lootName == '{lootName}'"));
             if (recipe is null)
             {
-                Console.WriteLine($"Ignoring {lootName} ({humanName}), since it can't be opened by itself, aka probably requiring a Hextech Key.");
+                Console.WriteLine($"Ignoring {PlayerLootToString(lootName, refId, count)}, since it can't be opened by itself, aka probably requiring a Hextech Key.");
                 continue;
             }
 
-            Console.Write($"Found {PlayerLootToString(loot)}. Open all? (Y/n): ");
+            Console.Write($"Found {PlayerLootToString(lootName, refId, count)}. Open all? (Y/n): ");
             await CraftAsync(new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = recipe.RecipeName, Repeat = count });
         }
     }
 
-    public async Task CleanupChampionsAsync()
+    public async Task CleanupChampionShardsAsync()
     {
+        var inventory = await _http.GetFromJsonAsync<JsonNode>($"{LedgeUrl}/lolinventoryservice-ledge/v1/inventories/simple?inventoryTypes=CHAMPION"); // no need for puuid, location, accountId params
+        var ownedChampionIds = inventory?["data"]?["items"]?["CHAMPION"].Deserialize<long[]>() ?? throw new Exception("Unable to fetch player inventory.");
+
         var response = await _http.PostAsJsonAsync($"{LedgeUrl}/championmastery-ledge/player/{_summonerId}/champions", _summonerJwt);
         response.EnsureSuccessStatusCode();
-        var masteries = await response.Content.ReadFromJsonAsync<JsonArray>();
-        if (masteries is not null)
-        {
-            // foreach (var mastery in masteries)
-            //     Console.WriteLine($"{mastery?["championId"]}: {mastery?["championPoints"]} Points, Level {mastery?["championLevel"]}, {mastery?["tokensEarned"]} Tokens");
-        }
-        else
-        {
-            Console.WriteLine("Unable to fetch player champion mastery.");
-        }
+        var masteries = await response.Content.ReadFromJsonAsync<ChampionMasteryResponseDTO[]>() ?? throw new Exception("Unable to fetch player champion mastery.");
+        Console.WriteLine("Mastery");
+        foreach (var mastery in masteries)
+            Console.WriteLine($"{_nameResolver.GetChampionName(mastery.ChampionId)}: {mastery.ChampionPoints} Points; Level {mastery.ChampionLevel}; {mastery.TokensEarned} Tokens");
 
-        // TODO
+        var lootDefinitions = await GetPlayerLootDefinitionsAsync();
+        foreach (var (lootName, refId, count) in lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("CHAMPION_RENTAL")))
+        {
+            Console.Write($"Found {PlayerLootToString(lootName, refId, count)}. ");
+
+            var keep = 0;
+            var championId = long.Parse(lootName.Remove(0, 16));
+
+            if (!ownedChampionIds.Contains(championId))
+            {
+                Console.Write("Not owned. ");
+                keep += 1;
+            }
+            else
+            {
+                Console.Write("Owned. ");
+            }
+
+            var mastery = masteries.FirstOrDefault(mastery => mastery.ChampionId == championId);
+            switch (mastery)
+            {
+                case null:
+                    Console.Write("Mastery 0. ");
+                    keep += 2;
+                    break;
+                case { ChampionLevel: <= 5 }:
+                    keep += 2;
+                    break;
+                case { ChampionLevel: 6 }:
+                    keep += 1;
+                    break;
+            }
+
+            if (mastery is { })
+                Console.Write($"Mastery {mastery.ChampionLevel}. ");
+
+            var repeat = count - keep;
+            Console.Write($"Keep {keep}. ");
+            if (repeat <= 0)
+            {
+                Console.WriteLine();
+                continue;
+            }
+
+            Console.Write($"Disenchant {repeat}? (Y/n): ");
+            await CraftAsync(new PlayerLootCraftRequestDTO
+            {
+                LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "CHAMPION_RENTAL_disenchant", Repeat = repeat
+            });
+        }
     }
 
     private async Task<PlayerLootDefinitionsResponseDTO> GetPlayerLootDefinitionsAsync()
@@ -130,37 +175,41 @@ public class HextechClient
         return _lootDefinitions;
     }
 
-    private async Task CraftAsync(PlayerLootCraftRequestDTO craftRequest)
+    public async Task CraftAsync(PlayerLootCraftRequestDTO craftRequest, bool ask = true)
     {
-        var key = Console.ReadKey();
-        Console.WriteLine();
-        if (key.Key is ConsoleKey.Y or ConsoleKey.Enter)
+        if (ask)
         {
-            var responseMessage = await _http.PostAsJsonAsync($"{LedgeUrl}/loot/v1/playerloot/location/lolriot.ams1.euw1/craftref/id/{Guid.NewGuid()}", craftRequest);
-            responseMessage.EnsureSuccessStatusCode();
-            var craftResponse = await responseMessage.Content.ReadFromJsonAsync<PlayerLootCraftResponseDTO>();
-            switch (craftResponse)
-            {
-                case { Status: "OK" }:
-                    if (craftResponse.Removed.Length > 0)
-                        Console.WriteLine(
-                            $"Removed: {craftResponse.Removed.Aggregate(string.Empty, (s, loot) => s + PlayerLootToString(loot) + "; ")}");
-                    if (craftResponse.Added.Length > 0)
-                        Console.WriteLine(
-                            $"Added: {craftResponse.Added.Aggregate(string.Empty, (s, loot) => s + PlayerLootToString(loot) + "; ")}");
-                    if (craftResponse.Redeemed.Length > 0)
-                        Console.WriteLine(
-                            $"Redeemed: {craftResponse.Redeemed.Aggregate(string.Empty, (s, lootName) => s + PlayerLootToString(new PlayerLoot(lootName, "", 1)) + "; ")}");
-                    break;
-                case { Status: not null }:
-                    Console.WriteLine($"{craftResponse.Status}: {craftResponse.Details}");
-                    break;
-                default:
-                    Console.WriteLine(await responseMessage.Content.ReadAsStringAsync());
-                    break;
-            }
+            var key = Console.ReadKey();
+            Console.WriteLine();
+            if (key is not { Key: ConsoleKey.Y or ConsoleKey.Enter })
+                return;
+        }
+
+        var responseMessage = await _http.PostAsJsonAsync($"{LedgeUrl}/loot/v1/playerloot/location/lolriot.ams1.euw1/craftref/id/{Guid.NewGuid()}", craftRequest);
+        responseMessage.EnsureSuccessStatusCode();
+        var craftResponse = await responseMessage.Content.ReadFromJsonAsync<PlayerLootCraftResponseDTO>();
+        switch (craftResponse)
+        {
+            case { Status: "OK" }:
+                if (craftResponse.Removed.Length > 0)
+                    Console.WriteLine(
+                        $"Removed: {craftResponse.Removed.Aggregate(string.Empty, (s, loot) => s + PlayerLootToString(loot) + "; ")}");
+                if (craftResponse.Added.Length > 0)
+                    Console.WriteLine(
+                        $"Added: {craftResponse.Added.Aggregate(string.Empty, (s, loot) => s + PlayerLootToString(loot) + "; ")}");
+                if (craftResponse.Redeemed.Length > 0)
+                    Console.WriteLine(
+                        $"Redeemed: {craftResponse.Redeemed.Aggregate(string.Empty, (s, lootName) => s + PlayerLootToString(lootName, "", 1) + "; ")}");
+                break;
+            case { Status: not null }:
+                Console.WriteLine($"{craftResponse.Status}: {craftResponse.Details}");
+                break;
+            default:
+                Console.WriteLine(await responseMessage.Content.ReadAsStringAsync());
+                break;
         }
     }
 
-    private string PlayerLootToString(PlayerLoot loot) => $"{loot.Count}x {_nameResolver.GetLootHumanName(loot.LootName, loot.RefId)} [{loot.LootName}]";
+    private string PlayerLootToString(PlayerLoot loot) => PlayerLootToString(loot.LootName, loot.RefId, loot.Count);
+    private string PlayerLootToString(string lootName, string refId, long count) => $"{count}x {_nameResolver.GetLootHumanName(lootName, refId)} [{lootName}]";
 }

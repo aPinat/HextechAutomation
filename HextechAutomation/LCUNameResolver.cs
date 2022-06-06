@@ -29,7 +29,8 @@ public class LCUNameResolver
         return new LCUNameResolver(await gameDataLootTask, await lootTransTask, await championsTask, await skinsTask);
     }
 
-    public string GetChampionName(string championId) => _champions?.First(node => node?["id"]?.GetValue<int>().ToString() == championId)?["name"]?.GetValue<string>() ?? "UNKNOWN";
+    public string GetChampionName(long championId) => _champions?.First(node => node?["id"]?.GetValue<long>() == championId)?["name"]?.GetValue<string>() ?? "UNKNOWN";
+    public string GetChampionName(string championId) => GetChampionName(long.Parse(championId));
 
     public string GetChampionSkinName(string skinId) => _skins?[skinId]?["name"]?.GetValue<string>() ?? "UNKNOWN";
 
