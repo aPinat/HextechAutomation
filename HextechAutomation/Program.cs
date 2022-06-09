@@ -13,3 +13,7 @@ await hextech.PrintPlayerLootAsync();
 await hextech.OpenChestsAsync();
 await hextech.CraftKeysAsync();
 await hextech.CleanupChampionShardsAsync();
+await hextech.ForgeEmotesAsync(); // Forge no-disenchant emotes into unowned emotes
+await hextech.ForgeEmotesAsync(new[] { "EMOTE_3153", "EMOTE_3154", "EMOTE_3155", "EMOTE_1506" }); // Keep Bee and D'Pengu Emotes
+
+// await hextech.CraftAsync(new PlayerLootCraftRequestDTO { LootNameRefIds = new []{new LootNameRefId {LootName = "MATERIAL_rare"}}, RecipeName = "MATERIAL_rare_forge_1_1", Repeat = 10}, false);

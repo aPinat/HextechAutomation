@@ -150,6 +150,47 @@ public class HextechClient
         }
     }
 
+    public async Task ForgeEmotesAsync()
+    {
+        var lootDefinitions = await GetPlayerLootDefinitionsAsync();
+        var emotes = lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("EMOTE") && !loot.LootName.StartsWith("EMOTE_RENTAL"));
+
+        foreach (var (lootName, refId, count) in emotes)
+        {
+            if (lootDefinitions.LootItemList.LootItems.FirstOrDefault(item => item.LootName == lootName)?.Tags.Contains("nodisenchant") is false)
+                continue;
+
+            var craftRequest = new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "EMOTE_forge", Repeat = count };
+            await CraftAsync(craftRequest, false);
+        }
+    }
+
+    public async Task ForgeEmotesAsync(string[] keep)
+    {
+        if (keep.Length == 0)
+        {
+            Console.WriteLine("ERROR: Requires at least 1 emote to keep.");
+            return;
+        }
+
+        while (true)
+        {
+            var lootDefinitions = await GetPlayerLootDefinitionsAsync();
+            var emotes = lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("EMOTE") && !loot.LootName.StartsWith("EMOTE_RENTAL")).ToArray();
+            if (emotes.All(loot => keep.Contains(loot.LootName)))
+                return;
+
+            foreach (var (lootName, refId, count) in emotes)
+            {
+                if (keep.Contains(lootName))
+                    continue;
+
+                var craftRequest = new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "EMOTE_forge", Repeat = count };
+                await CraftAsync(craftRequest, false);
+            }
+        }
+    }
+
     private async Task<PlayerLootDefinitionsResponseDTO> GetPlayerLootDefinitionsAsync()
     {
         if (_lootDefinitions is null)
