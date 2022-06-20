@@ -157,7 +157,8 @@ public class HextechClient
 
         foreach (var (lootName, refId, count) in emotes)
         {
-            if (lootDefinitions.LootItemList.LootItems.FirstOrDefault(item => item.LootName == lootName)?.Tags.Contains("nodisenchant") is false)
+            var tags = lootDefinitions.LootItemList.LootItems.FirstOrDefault(item => item.LootName == lootName)?.Tags;
+            if (tags != null && !tags.Contains("nodisenchant") && !tags.Contains("norerolloutput"))
                 continue;
 
             var craftRequest = new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "EMOTE_forge", Repeat = count };
