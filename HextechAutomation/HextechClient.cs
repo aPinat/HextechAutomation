@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -153,17 +153,14 @@ public class HextechClient
     public async Task ForgeEmotesAsync()
     {
         var lootDefinitions = await GetPlayerLootDefinitionsAsync();
-        var emotes = lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("EMOTE") && !loot.LootName.StartsWith("EMOTE_RENTAL"));
+        var emotesToReroll = lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("EMOTE") && !loot.LootName.StartsWith("EMOTE_RENTAL"))
+            .Where(loot =>
+            {
+                var tags = lootDefinitions.LootItemList.LootItems.FirstOrDefault(item => item.LootName == loot.LootName)?.Tags;
+                return tags != null && tags.Contains("nodisenchant") && tags.Contains("norerolloutput") && !tags.Contains("noreroll");
+            });
 
-        foreach (var (lootName, refId, count) in emotes)
-        {
-            var tags = lootDefinitions.LootItemList.LootItems.FirstOrDefault(item => item.LootName == lootName)?.Tags;
-            if (tags != null && !tags.Contains("nodisenchant") && !tags.Contains("norerolloutput"))
-                continue;
-
-            var craftRequest = new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "EMOTE_forge", Repeat = count };
-            await CraftAsync(craftRequest, false);
-        }
+        await ForgeEmotesAsync(emotesToReroll);
     }
 
     public async Task ForgeEmotesAsync(string[] keep)
@@ -177,18 +174,23 @@ public class HextechClient
         while (true)
         {
             var lootDefinitions = await GetPlayerLootDefinitionsAsync();
-            var emotes = lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("EMOTE") && !loot.LootName.StartsWith("EMOTE_RENTAL")).ToArray();
-            if (emotes.All(loot => keep.Contains(loot.LootName)))
+            var emotesToReroll = lootDefinitions.PlayerLoot.Where(loot => loot.LootName.StartsWith("EMOTE") && !loot.LootName.StartsWith("EMOTE_RENTAL"))
+                .Where(loot => lootDefinitions.LootItemList.LootItems.FirstOrDefault(item => item.LootName == loot.LootName)?.Tags?.Contains("noreroll") != true)
+                .Where(loot => !keep.Contains(loot.LootName))
+                .ToArray();
+            if (emotesToReroll.Length == 0)
                 return;
 
-            foreach (var (lootName, refId, count) in emotes)
-            {
-                if (keep.Contains(lootName))
-                    continue;
+            await ForgeEmotesAsync(emotesToReroll);
+        }
+    }
 
-                var craftRequest = new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "EMOTE_forge", Repeat = count };
-                await CraftAsync(craftRequest, false);
-            }
+    private async Task ForgeEmotesAsync(IEnumerable<PlayerLoot> emotesToReroll)
+    {
+        foreach (var (lootName, refId, count) in emotesToReroll)
+        {
+            var craftRequest = new PlayerLootCraftRequestDTO { LootNameRefIds = new[] { new LootNameRefId { LootName = lootName, RefId = refId } }, RecipeName = "EMOTE_forge", Repeat = count };
+            await CraftAsync(craftRequest, false);
         }
     }
 
