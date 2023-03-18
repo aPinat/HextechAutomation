@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -8,9 +8,9 @@ namespace HextechAutomation;
 
 public class HextechClient
 {
-    private const string LedgeUrl = "https://euw-blue.lol.sgp.pvp.net"; // TODO: clientconfig or system.yaml, maybe part of RiotAuth
+    private const string LedgeUrl = "https://euw-red.lol.sgp.pvp.net"; // TODO: clientconfig or system.yaml, maybe part of RiotAuth
     private const string Region = "EUW1"; // TODO: any token, maybe part of RiotAuth
-    private const string Location = "lolriot.ams1.euw1"; // TODO: read system.yaml or hardcode by region or where else can I get this?
+    private const string Location = "lolriot.aws-euc1-prod.euw1"; // TODO: read system.yaml or hardcode by region or where else can I get this?
 
     private readonly HttpClient _http;
     private readonly LCUNameResolver _nameResolver;
