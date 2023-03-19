@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -27,7 +28,7 @@ public class HextechClient
         _summonerId = summonerId;
     }
 
-    public static async Task<HextechClient> CreateInstanceAsync(string sessionToken)
+    public static async Task<HextechClient> CreateInstanceAsync(JsonWebToken sessionToken)
     {
         var nameResolverTask = LCUNameResolver.CreateInstanceAsync();
         var puuid = RiotSignOn.GetPuuid(sessionToken);
@@ -36,7 +37,7 @@ public class HextechClient
         http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "HextechAutomation/0.1 (https://github.com/aPinat/HextechAutomation)");
         http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
         http.DefaultRequestHeaders.TryAddWithoutValidation("Content-Type", "application/json");
-        http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {sessionToken}");
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sessionToken.EncodedToken);
 
         var json = await http.GetFromJsonAsync<JsonNode>($"{LedgeUrl}/summoner-ledge/v1/regions/{Region}/summoners/puuid/{puuid}/jwt");
         var summonerJwt = json?.GetValue<string>() ?? throw new Exception("Unable to fetch summoner JWT");
